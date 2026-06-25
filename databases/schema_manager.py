@@ -32,6 +32,27 @@ def validate_mysql_schema(cursor):
 
     print("------All database validations passed successfully------")
 
+def create_mongo_schema(db):
+    if "users" not in db.list_collection_names():
+        db.create_collection("users", validator={
+            "$jsonSchema": {
+                "bsonType": "object",
+                "required": ["user_id", "login"],
+                "properties": {
+                    "user_id": {"bsonType": "int"},
+                    "login": {"bsonType": "string"},
+                    "gravatar_id": {"bsonType": "string"},
+                    "url": {"bsonType": "string"},
+                    "avatar_url": {"bsonType": "string"}
+                }
+            }
+        })
+        db.users.create_index("user_id", unique=True)
+        print("------Created MongoDB collection 'users' successfully------")
+    else:
+        print("------MongoDB collection 'users' already exists------")
+
+   
 
 def validate_expected_tables(cursor):
     expected_tables = {

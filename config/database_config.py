@@ -9,7 +9,12 @@ class MySQLConfig():
     user: str
     password: str
 
-def get_mysql_config():
+@dataclass
+class MongoConfig():
+    uri: str
+    db_name: str
+
+def get_database_config():
     load_dotenv()
     config = {
         "mysql": MySQLConfig(
@@ -17,10 +22,14 @@ def get_mysql_config():
             port=int(os.getenv("MYSQL_PORT")),
             user=os.getenv("MYSQL_USER"),
             password=os.getenv("MYSQL_PASSWORD")
+        ),
+        "mongo": MongoConfig(
+            uri=os.getenv("MONGO_URI"),
+            db_name=os.getenv("MONGO_DB_NAME")
         )
     }
     return config
 
 if __name__ == "__main__":
-    mysql_config = get_mysql_config()
-    print(mysql_config["mysql"].host)
+    config = get_database_config()
+    print(config)
