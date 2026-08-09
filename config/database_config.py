@@ -8,6 +8,7 @@ class MySQLConfig():
     port: int
     user: str
     password: str
+    table: str = "users"
 
 @dataclass
 class MongoConfig():
@@ -21,7 +22,8 @@ def get_database_config():
             host=os.getenv("MYSQL_HOST"),
             port=int(os.getenv("MYSQL_PORT")),
             user=os.getenv("MYSQL_USER"),
-            password=os.getenv("MYSQL_PASSWORD")
+            password=os.getenv("MYSQL_PASSWORD"),
+            database=os.getenv("MYSQL_DB_NAME")
         ),
         "mongo": MongoConfig(
             uri=os.getenv("MONGO_URI"),
@@ -29,6 +31,26 @@ def get_database_config():
         )
     }
     return config
+
+def get_spark_config():
+    db_config = get_database_config()
+    
+    return {
+        "mysql": {
+            "table": db_config["mysql"].table,
+            "jdbc_url": f"jdbc:mysql://{db_config['mysql'].host}:{db_config['mysql'].port}/{db_config['mysql'].database}",
+            "config": {
+                "host": db_config["mysql"].host,
+                "port": db_config["mysql"].port,
+                "user": db_config["mysql"].user,
+                "password": db_config["mysql"].password,
+                "database": db_config["mysql"].database
+            }   
+        },
+        "mongo": {},
+        "redis": {}
+    }
+    
 
 if __name__ == "__main__":
     config = get_database_config()
