@@ -39,7 +39,7 @@ def create_mongo_schema(db):
                 "bsonType": "object",
                 "required": ["user_id", "login"],
                 "properties": {
-                    "user_id": {"bsonType": "int"},
+                    "user_id": {"bsonType": "long"},
                     "login": {"bsonType": "string"},
                     "gravatar_id": {"bsonType": "string"},
                     "url": {"bsonType": "string"},
@@ -52,7 +52,14 @@ def create_mongo_schema(db):
     else:
         print("------MongoDB collection 'users' already exists------")
 
-   
+def validate_mongo_schema(db):
+    collection = db.list_collection_names()
+    print(f"------MongoDB collections: {collection}------")
+    if "users" not in collection:
+        raise Exception("--------Collection 'users' does not exist in MongoDB--------")
+    user = db.users.find_one({"user_id": 1})
+    if not user:
+        raise Exception("--------No document found for user_id: 1--------")
 
 def validate_expected_tables(cursor):
     expected_tables = {

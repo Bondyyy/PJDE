@@ -1,6 +1,6 @@
 from databases.mysql_connect import MySQLConnect
 from config.database_config import get_database_config
-from databases.schema_manager import create_mongo_schema, create_mysql_schema, validate_mysql_schema
+from databases.schema_manager import create_mongo_schema, create_mysql_schema, validate_mysql_schema, validate_mongo_schema
 from databases.mongodb_connect import MongoDBConnection
 
 
@@ -43,7 +43,6 @@ def main(config):
         # MongoDB
         with MongoDBConnection(config["mongo"].uri, config["mongo"].db_name) as mongo_client:
             create_mongo_schema(mongo_client.db)
-
             for user_id in range(1, 6):
                 mongo_client.db.users.update_one(
                     {"user_id": user_id},
@@ -59,7 +58,8 @@ def main(config):
                     upsert=True
                 )
 
-            print("------Inserted/Updated documents into MongoDB collection 'users' successfully------")
+            print("------Inserted into MongoDB collection successfully------")
+            validate_mongo_schema(mongo_client.db)
 
 
 if __name__ == "__main__":
