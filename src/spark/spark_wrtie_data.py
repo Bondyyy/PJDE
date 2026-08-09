@@ -13,4 +13,5 @@ class SparkWriteDatabase:
             option("password", config["password"]).\
             option("driver", "com.mysql.cj.jdbc.Driver").\
             mode(mode).save()
+        print(f"------Data written to MySQL table '{table_name}' successfully------")
         
