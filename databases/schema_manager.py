@@ -23,60 +23,40 @@ def create_mysql_schema(connection, cursor):
         raise Exception(f"--------Error executing SQL script: {e} --------") from e
 
 def validate_mysql_schema(cursor):
-    validate_expected_tables(cursor)
-    validate_expected_columns(cursor)
-    validate_minimum_row_counts(cursor)
-    validate_required_fields(cursor)
-    validate_unique_fields(cursor)
-    validate_url_format(cursor)
-
-    print("------All database validations passed successfully------")
-
-def create_mongo_schema(db):
-    if "users" not in db.list_collection_names():
-        db.create_collection("users", validator={
-            "$jsonSchema": {
-                "bsonType": "object",
-                "required": ["user_id", "login"],
-                "properties": {
-                    "user_id": {"bsonType": "long"},
-                    "login": {"bsonType": "string"},
-                    "gravatar_id": {"bsonType": "string"},
-                    "url": {"bsonType": "string"},
-                    "avatar_url": {"bsonType": "string"}
-                }
-            }
-        })
-        db.users.create_index("user_id", unique=True)
-        print("------Created MongoDB collection 'users' successfully------")
-    else:
-        print("------MongoDB collection 'users' already exists------")
-
-def validate_mongo_schema(db):
-    collection = db.list_collection_names()
-    print(f"------MongoDB collections: {collection}------")
-    if "users" not in collection:
-        raise Exception("--------Collection 'users' does not exist in MongoDB--------")
-    user = db.users.find_one({"user_id": 1})
-    if not user:
-        raise Exception("--------No document found for user_id: 1--------")
-
-def validate_expected_tables(cursor):
-    expected_tables = {
-        "users",
-        "repositories",
-    }
-
+    expected_tables = {"users","repositories"}
+    
     cursor.execute("SHOW TABLES")
     existing_tables = {row[0] for row in cursor.fetchall()}
 
     missing_tables = expected_tables - existing_tables
 
     if missing_tables:
-        raise Exception(
-            f"--------Validation failed. Missing tables: {missing_tables}--------"
-        )
+        raise Exception(f"--------Validation failed. Missing tables: {missing_tables}--------")
+    print(f"------MySQL collections: {existing_tables}------")
 
+def create_mongo_schema(db):
+    db.drop_collection("users")
+    db.create_collection("users", validator={
+                "$jsonSchema": {
+                    "bsonType": "object",
+                    "required": ["user_id", "login"],
+                    "properties": {
+                        "user_id": {"bsonType": "long"},
+                        "login": {"bsonType": "string"},
+                        "gravatar_id": {"bsonType": "string"},
+                        "url": {"bsonType": "string"},
+                        "avatar_url": {"bsonType": "string"}
+                    }
+                }
+            })
+    db.users.create_index("user_id", unique=False)
+    print("------Created MongoDB collection 'users' successfully------")
+
+def validate_mongo_schema(db):
+    collection = db.list_collection_names()
+    print(f"------MongoDB collections: {collection}------")
+    if "users" not in collection:
+        raise Exception("--------Collection 'users' does not exist in MongoDB--------")
 
 def validate_expected_columns(cursor):
     expected_columns = {

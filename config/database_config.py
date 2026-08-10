@@ -8,6 +8,7 @@ class MySQLConfig():
     port: int
     user: str
     password: str
+    database: str
     table: str = "users"
 
 @dataclass
@@ -47,7 +48,11 @@ def get_spark_config():
                 "database": db_config["mysql"].database
             }   
         },
-        "mongo": {},
+        "mongo": {
+            "collection": "users",
+            "uri": db_config["mongo"].uri,
+            "database": db_config["mongo"].db_name
+        },
         "redis": {}
     }
     

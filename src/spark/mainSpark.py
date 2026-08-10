@@ -1,18 +1,27 @@
 from config.spark_config import SparkConnect
-from pyspark.sql.types import StructType, StructField, StringType, LongType
+from pyspark.sql.types import (StructType, StructField, StringType, LongType)
 from config.database_config import get_spark_config
 from src.spark.spark_wrtie_data import SparkWriteDatabase
 from pyspark.sql.functions import col
 
 def main():
+    spark_connect = None
+
     jars = [
-        "com.mysql:mysql-connector-j:8.0.33"
+        "com.mysql:mysql-connector-j:8.0.33",
+        "org.mongodb.spark:mongo-spark-connector_2.13:11.1.0"
     ]
-    sparkConnect = SparkConnect(app_name="MySparkApp", master_url="local[*]", 
-                                executor_memory="4g", executor_cores=2, 
-                                driver_memory="2g", num_executors=1, 
-                                jar_packages=jars, log_level="DEBUG")
-    
+    spark_connect = SparkConnect(
+        app_name="MySparkApp",
+        master_url="local[*]",
+        executor_memory="4g",
+        executor_cores=2,
+        driver_memory="2g",
+        num_executors=1,
+        jar_packages=jars,
+        log_level="INFO"
+    )
+
     schema = StructType([
         StructField("actor", StructType([
             StructField("id", LongType(), True),
@@ -28,19 +37,29 @@ def main():
             StructField("url", StringType(), True)
         ]), True)
     ])
-    
-    df = sparkConnect.spark.read.json("D:\\ProjectDE\\data\\2015-03-01-17.json", schema=schema)
-    df_write_table = df.select(
-        col("actor.id").alias("user_id"),
-        col("actor.login").alias("login"),
-        col("actor.gravatar_id").alias("gravatar_id"),
-        col("actor.url").alias("url"),
-        col("actor.avatar_url").alias("avatar_url")
+
+    df = spark_connect.spark.read.json(
+        r"D:\ProjectDE\data\2015-03-01-17.json",
+        schema=schema
     )
+
+    users_df = (
+        df.select(
+            col("actor.id").alias("user_id"),
+            col("actor.login").alias("login"),
+            col("actor.gravatar_id").alias("gravatar_id"),
+            col("actor.url").alias("url"),
+            col("actor.avatar_url").alias("avatar_url")
+        )
+    )
+
     spark_config = get_spark_config()
-    df_write = SparkWriteDatabase(sparkConnect.spark, spark_config)
-    df_write.spark_write_mysql(df_write_table, spark_config["mysql"]["table"],
-                               spark_config["mysql"]["jdbc_url"], spark_config["mysql"])
+    writer = SparkWriteDatabase(
+        spark_connect.spark,
+        spark_config
+    )
+
+    writer.spark_write_all(df=users_df)
 
 if __name__ == "__main__":
     main()
