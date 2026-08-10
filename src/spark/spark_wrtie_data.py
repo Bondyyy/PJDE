@@ -10,9 +10,8 @@ class SparkWriteDatabase:
         self.spark = spark
         self.db_config = db_config
         
-    def spark_write_mysql(self, df: DataFrame, table_name: str, jdbc_url: str, config: Dict, mode: str = "append"):
+    def spark_write_mysql(self, df: DataFrame, table_name: str, jdbc_url: str, config: Dict, spark_write_id: str =None, mode: str = "append"):
         #python add column temp
-        spark_write_id = None
         try:
             with MySQLConnect(config["host"], config["port"], config["user"], config["password"]) as mysql_conn:
                 connection = mysql_conn.connection
@@ -43,24 +42,25 @@ class SparkWriteDatabase:
                     )
 
                 # 3. Tìm số Spark run lớn nhất
-                cursor.execute(f"""
-                    SELECT COALESCE(
-                        MAX(
-                            CAST(
-                                SUBSTRING_INDEX(spark_write, '_', -1)
-                                AS UNSIGNED
-                            )
-                        ),
-                        0
-                    )
-                    FROM `{table_name}`
-                    WHERE spark_write LIKE 'spark_%'
-                """)
-                last_spark_id = cursor.fetchone()[0]
+                if spark_write_id is None:
+                    cursor.execute(f"""
+                        SELECT COALESCE(
+                            MAX(
+                                CAST(
+                                    SUBSTRING_INDEX(spark_write, '_', -1)
+                                    AS UNSIGNED
+                                )
+                            ),
+                            0
+                        )
+                        FROM `{table_name}`
+                        WHERE spark_write LIKE 'spark_%'
+                    """)
+                    last_spark_id = cursor.fetchone()[0]
 
-                # 4. Tạo ID cho lần chạy hiện tại
-                next_spark_id = last_spark_id + 1
-                spark_write_id = f"spark_{next_spark_id}"
+                    next_spark_id = last_spark_id + 1
+                    spark_write_id = f"spark_{next_spark_id}"
+
 
                 connection.commit()
         except Exception as e:
@@ -87,7 +87,9 @@ class SparkWriteDatabase:
         jdbc_url: str,
         config: Dict,
         df: DataFrame,
-        spark_write_id: str
+        spark_write_id: str,
+        retry: int = 0,
+        max_retry: int = 3
     ):
         query = f"""
             (
@@ -108,7 +110,7 @@ class SparkWriteDatabase:
             .load()
         )
 
-        # Chỉ lấy các cột giống DataFrame gốc
+        # Lấy các cột giống DataFrame gốc
         read_df = read_df.select(*df.columns)
 
         # 1. Kiểm tra số lượng records
@@ -143,9 +145,30 @@ class SparkWriteDatabase:
         print(f"Missing records: {missing_count}")
         print(f"Extra/Wrong records: {extra_count}")
 
-        if missing_count > 0:
+        if (
+            missing_count > 0
+            and extra_count == 0
+            and retry < max_retry
+        ):
             print("------Missing records------")
             missing_df.show(20, truncate=False)
+            self.spark_write_mysql(
+                df=missing_df,
+                table_name=table_name,
+                jdbc_url=jdbc_url,
+                config=config,
+                mode="append",
+                spark_write_id=spark_write_id
+            )
+            return self.validate_mysql_write(
+                table_name=table_name,
+                jdbc_url=jdbc_url,
+                config=config,
+                df=df,
+                spark_write_id=spark_write_id,
+                retry=retry + 1,
+                max_retry=max_retry
+            )
 
         if extra_count > 0:
             print("------Extra/Wrong records------")
@@ -179,16 +202,7 @@ class SparkWriteDatabase:
             mode=mode
         )
 
-        # 2. Validate đúng lần write vừa rồi
-        self.validate_mysql_write(
-            table_name=mysql_config["table"],
-            jdbc_url=mysql_config["jdbc_url"],
-            config=mysql_config["config"],
-            df=df,
-            spark_write_id=spark_write_id
-        )
-
-        # 3. Write Mongo
+        # 2. Write Mongo
         self.spark_write_mongo(
             df=df,
             collection_name=mongo_config["collection"],
@@ -196,3 +210,4 @@ class SparkWriteDatabase:
             database_name=mongo_config["database"],
             mode=mode
         )
+        return spark_write_id

@@ -59,7 +59,12 @@ def main():
         spark_config
     )
 
-    writer.spark_write_all(df=users_df)
+    spark_id = writer.spark_write_all(df=users_df)
+    writer.validate_mysql_write(table_name=spark_config["mysql"]["table"],
+                                jdbc_url=spark_config["mysql"]["jdbc_url"],
+                                config=spark_config["mysql"]["config"],
+                                df=users_df,
+                                spark_write_id=spark_id)
 
 if __name__ == "__main__":
     main()

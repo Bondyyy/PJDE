@@ -16,27 +16,6 @@ def main(config):
 
         # MySQL
         create_mysql_schema(connection, cursor)
-
-        for user_id in range(1, 6):
-            cursor.execute(
-                """
-                INSERT INTO users (user_id, login, gravatar_id, url, avatar_url)
-                VALUES (%s, %s, %s, %s, %s)
-                ON DUPLICATE KEY UPDATE
-                    login = VALUES(login),
-                    gravatar_id = VALUES(gravatar_id),
-                    url = VALUES(url),
-                    avatar_url = VALUES(avatar_url)
-                """,
-                (
-                    user_id,
-                    f"octocat_{user_id}",
-                    f"gravatar_id_{user_id}",
-                    f"https://github.com/users/{user_id}",
-                    f"https://avatars.github.com/u/{user_id}"
-                )
-            )
-
         connection.commit()
         validate_mysql_schema(cursor)
 
