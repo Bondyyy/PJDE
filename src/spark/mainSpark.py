@@ -68,12 +68,12 @@ def main():
         spark_id,
         mysql_expected_df,
         mongo_expected_df
-    ) = writer.spark_write_all_pk(
+    ) = writer.spark_write_all(
         df=users_df,
         primary_key="user_id"
     )
 
-    writer.validate_all_pk(
+    writer.validate_all(
         mysql_expected_df=mysql_expected_df,
         mongo_expected_df=mongo_expected_df,
         spark_write_id=spark_id
