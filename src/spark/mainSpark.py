@@ -1,16 +1,21 @@
 from config.spark_config import SparkConnect
-from pyspark.sql.types import (StructType, StructField, StringType, LongType)
+from pyspark.sql.types import (
+    StructType,
+    StructField,
+    StringType,
+    LongType
+)
 from config.database_config import get_spark_config
 from src.spark.spark_wrtie_data import SparkWriteDatabase
 from pyspark.sql.functions import col
 
 def main():
-    spark_connect = None
 
     jars = [
         "com.mysql:mysql-connector-j:8.0.33",
         "org.mongodb.spark:mongo-spark-connector_2.13:11.1.0"
     ]
+
     spark_connect = SparkConnect(
         app_name="MySparkApp",
         master_url="local[*]",
@@ -43,28 +48,37 @@ def main():
         schema=schema
     )
 
-    users_df = (
-        df.select(
-            col("actor.id").alias("user_id"),
-            col("actor.login").alias("login"),
-            col("actor.gravatar_id").alias("gravatar_id"),
-            col("actor.url").alias("url"),
-            col("actor.avatar_url").alias("avatar_url")
-        )
+    users_df = df.select(
+        col("actor.id").alias("user_id"),
+        col("actor.login").alias("login"),
+        col("actor.gravatar_id").alias("gravatar_id"),
+        col("actor.url").alias("url"),
+        col("actor.avatar_url").alias("avatar_url")
     )
 
     spark_config = get_spark_config()
+
     writer = SparkWriteDatabase(
         spark_connect.spark,
         spark_config
     )
 
-    spark_id = writer.spark_write_all(df=users_df)
-    writer.validate_mysql_write(table_name=spark_config["mysql"]["table"],
-                                jdbc_url=spark_config["mysql"]["jdbc_url"],
-                                config=spark_config["mysql"]["config"],
-                                df=users_df,
-                                spark_write_id=spark_id)
+    # WRITE
+    (
+        spark_id,
+        mysql_expected_df,
+        mongo_expected_df
+    ) = writer.spark_write_all_pk(
+        df=users_df,
+        primary_key="user_id"
+    )
+
+    writer.validate_all_pk(
+        mysql_expected_df=mysql_expected_df,
+        mongo_expected_df=mongo_expected_df,
+        spark_write_id=spark_id
+    )
+
 
 if __name__ == "__main__":
     main()
