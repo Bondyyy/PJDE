@@ -16,6 +16,12 @@ class MongoConfig():
     uri: str
     db_name: str
 
+def get_kafka_config():
+    load_dotenv()
+    config = {
+        "bootstrap_servers": os.getenv("BootstrapServers")
+    }
+    return config
 def get_database_config():
     load_dotenv()
     config = {

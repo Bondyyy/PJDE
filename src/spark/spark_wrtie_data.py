@@ -350,7 +350,7 @@ class SparkWriteDatabase:
         của duplicate record.
         """
 
-        # Chỉ giữ các column của source
+        #  giữ các column của source
         target_df = target_df.select(*source_df.columns)
 
         source_count = source_df.count()
@@ -539,7 +539,6 @@ class SparkWriteDatabase:
             extra_df.show(20, truncate=False)
 
         return False
-
 
     def validate_all(
         self,
