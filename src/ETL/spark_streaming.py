@@ -3,12 +3,14 @@ from pymongo import MongoClient
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, from_json
 from pyspark.sql.types import StructType, StructField, StringType, LongType
+import os
 
 from config.database_config import (
     get_database_config,
     get_kafka_config,
 )
 
+CHECKPOINT_LOCATION = os.getenv( "SPARK_CHECKPOINT_LOCATION")
 USER_COLLECTION = "users"
 REPOSITORY_COLLECTION = "repositories"
 
@@ -169,6 +171,6 @@ data = data_decode.select(from_json(col("value"), kafka_schema).alias("data")).s
                         
 data.writeStream \
     .foreachBatch(process_batch) \
-    .option("checkpointLocation", "D:/ProjectDE/checkpoints/spark_mongo") \
+    .option("checkpointLocation", CHECKPOINT_LOCATION) \
     .start() \
     .awaitTermination()

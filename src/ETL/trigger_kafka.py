@@ -29,7 +29,25 @@ def fetch_logs(cursor, table_name, columns, last_log_id):
     )
     return cursor.fetchall()
 
+def load_checkpoints(cursor):
+    cursor.execute("""SELECT entity, last_log_id
+        FROM kafka_checkpoint
+    """)
 
+    return {
+        entity: last_log_id
+        for entity, last_log_id in cursor.fetchall()
+    }
+    
+def save_checkpoint(cursor,entity,last_log_id):
+    cursor.execute("""
+        UPDATE kafka_checkpoint
+        SET last_log_id = %s
+        WHERE entity = %s
+    """, (
+        last_log_id,
+        entity
+    ))
 def trigger_kafka():
     configDB = get_database_config()
     configKafka = get_kafka_config()
@@ -52,10 +70,7 @@ def trigger_kafka():
             cursor.execute(f"USE `{database}`")
             connection.autocommit = True
 
-            last_log_ids = {
-                "users": 0,
-                "repositories": 0,
-            }
+            last_log_ids = load_checkpoints(cursor)
 
             while True:
                 for entity, source in LOG_SOURCES.items():
@@ -71,7 +86,7 @@ def trigger_kafka():
 
                     producer.flush()
                     last_log_ids[entity] = rows[-1][0]
-
+                    save_checkpoint(cursor, entity, last_log_ids[entity])
                     print(f"Sent {len(rows)} {entity} records")
                     print(
                         f"Last {entity} log id: {last_log_ids[entity]}"

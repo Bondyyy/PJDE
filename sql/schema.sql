@@ -1,6 +1,3 @@
-DROP TABLE IF EXISTS users;
-DROP TABLE IF EXISTS repositories;
-
 CREATE TABLE IF NOT EXISTS users (
     user_id BIGINT,
     login VARCHAR(255) NOT NULL,

@@ -94,9 +94,7 @@ CREATE TABLE IF NOT EXISTS repositories_log (
     name VARCHAR(255),
     url VARCHAR(255),
     state VARCHAR(20),
-    log_timestamp TIMESTAMP(3)
-        DEFAULT CURRENT_TIMESTAMP(3),
-
+    log_timestamp TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP(3),
     PRIMARY KEY (log_id)
 );
 
@@ -163,3 +161,21 @@ BEGIN
 END//
 
 DELIMITER ;
+
+CREATE TABLE IF NOT EXISTS kafka_checkpoint (
+    entity VARCHAR(50) NOT NULL,
+    last_log_id BIGINT NOT NULL DEFAULT 0,
+    updated_at TIMESTAMP(3)
+        DEFAULT CURRENT_TIMESTAMP(3)
+        ON UPDATE CURRENT_TIMESTAMP(3),
+
+    PRIMARY KEY (entity)
+);
+
+INSERT IGNORE INTO kafka_checkpoint (
+    entity,
+    last_log_id
+)
+VALUES
+    ('users', 0),
+    ('repositories', 0);
