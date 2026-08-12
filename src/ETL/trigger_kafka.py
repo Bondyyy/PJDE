@@ -39,7 +39,7 @@ def trigger_kafka():
             cursor.execute("""
                 SELECT log_id, user_id, login, gravatar_id, url,
                     avatar_url, state, log_timestamp
-                FROM users_log_before
+                FROM users_log
                 WHERE log_id > %s
                 ORDER BY log_id
             """, (last_log_id,))
@@ -48,7 +48,7 @@ def trigger_kafka():
             if data:
                 for row in data:
                     message = dict(zip(columns, row))
-                    producer.send("BondyPJDE", message)
+                    producer.send("BondyPJDE_raw", message)
 
                 producer.flush()
 
