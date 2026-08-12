@@ -22,6 +22,7 @@ def get_kafka_config():
         "bootstrap_servers": os.getenv("BootstrapServers")
     }
     return config
+
 def get_database_config():
     load_dotenv()
     config = {
