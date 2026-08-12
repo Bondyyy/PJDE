@@ -1,6 +1,7 @@
 from pathlib import Path
 
 SQL_FILE_PATH = Path(__file__).resolve().parent.parent / "sql" / "schema.sql"
+TRIGGER_FILE_PATH =  Path(__file__).resolve().parent.parent/ "sql"/ "trigger.sql"
 
 def create_mysql_schema(connection, cursor):
     
@@ -22,6 +23,63 @@ def create_mysql_schema(connection, cursor):
         connection.rollback()
         raise Exception(f"--------Error executing SQL script: {e} --------") from e
 
+def create_mysql_triggers(connection, cursor):
+    try:
+        with open(TRIGGER_FILE_PATH, "r", encoding="utf-8") as sql_file:
+            sql_script = sql_file.read()
+        delimiter = ";"
+        statement_lines = []
+
+        for raw_line in sql_script.splitlines():
+            line = raw_line.strip()
+            # Bỏ qua dòng rỗng
+            if not line:
+                continue
+            # Đổi delimiter khi gặp: DELIMITER //
+            if line.upper().startswith("DELIMITER "):
+                delimiter = line.split(None, 1)[1]
+                continue
+
+            statement_lines.append(raw_line)
+            statement = "\n".join(statement_lines).strip()
+            # Chỉ execute khi gặp delimiter hiện tại
+            if statement.endswith(delimiter):
+                statement = statement[:-len(delimiter)].strip()
+                if statement:
+                    cursor.execute(statement)
+                statement_lines = []
+
+        # Phòng trường hợp file còn câu SQL chưa execute
+        if statement_lines:
+            statement = "\n".join(statement_lines).strip()
+            if statement:
+                cursor.execute(statement)
+        connection.commit()
+        print("------Created MySQL logs and triggers successfully------")
+    except Exception as e:
+        connection.rollback()
+        raise Exception(
+            f"--------Error creating MySQL triggers: {e}--------"
+        ) from e
+
+def validate_mysql_triggers(cursor):
+    expected_triggers = {"after_insert_user_log", "after_update_user_log", "after_delete_user_log", 
+                         "after_insert_repository_log", "after_update_repository_log", "after_delete_repository_log",}
+    cursor.execute("SHOW TRIGGERS")
+
+    existing_triggers = {
+        row[0]
+        for row in cursor.fetchall()
+    }
+
+    missing_triggers = (
+        expected_triggers - existing_triggers
+    )
+
+    if missing_triggers:
+        raise Exception(f"--------Missing MySQL triggers: {missing_triggers}--------")
+    print(f"------MySQL triggers: {existing_triggers}------")
+    
 def validate_mysql_schema(cursor):
     expected_tables = {"users","repositories"}
     
@@ -34,29 +92,78 @@ def validate_mysql_schema(cursor):
         raise Exception(f"--------Validation failed. Missing tables: {missing_tables}--------")
     print(f"------MySQL collections: {existing_tables}------")
 
+
+def create_collection(db, collection_name, validator, index_field, unique_index):
+    if collection_name not in db.list_collection_names():
+        db.create_collection(collection_name, validator=validator)
+        action = "Created"
+    else:
+        db.command(
+            "collMod",
+            collection_name,
+            validator=validator,
+        )
+        action = "Updated"
+
+    db[collection_name].create_index(index_field, unique=unique_index)
+    print(
+        f"------{action} MongoDB collection '{collection_name}' successfully------"
+    )
+
+
 def create_mongo_schema(db):
-    db.drop_collection("users")
-    db.create_collection("users", validator={
-                "$jsonSchema": {
-                    "bsonType": "object",
-                    "required": ["user_id", "login"],
-                    "properties": {
-                        "user_id": {"bsonType": "long"},
-                        "login": {"bsonType": "string"},
-                        "gravatar_id": {"bsonType": "string"},
-                        "url": {"bsonType": "string"},
-                        "avatar_url": {"bsonType": "string"}
-                    }
-                }
-            })
-    db.users.create_index("user_id", unique=False)
-    print("------Created MongoDB collection 'users' successfully------")
+    users_validator = {
+        "$jsonSchema": {
+            "bsonType": "object",
+            "required": ["user_id", "login"],
+            "properties": {
+                "user_id": {"bsonType": "long"},
+                "login": {"bsonType": "string"},
+                "gravatar_id": {"bsonType": "string"},
+                "url": {"bsonType": "string"},
+                "avatar_url": {"bsonType": "string"},
+            },
+        }
+    }
+    repositories_validator = {
+        "$jsonSchema": {
+            "bsonType": "object",
+            "required": ["repo_id", "name"],
+            "properties": {
+                "repo_id": {"bsonType": "long"},
+                "name": {"bsonType": "string"},
+                "url": {"bsonType": "string"},
+            },
+        }
+    }
+
+    create_collection(
+        db,
+        "users",
+        users_validator,
+        "user_id",
+        unique_index=False,
+    )
+    create_collection(
+        db,
+        "repositories",
+        repositories_validator,
+        "repo_id",
+        unique_index=True,
+    )
+
 
 def validate_mongo_schema(db):
-    collection = db.list_collection_names()
-    print(f"------MongoDB collections: {collection}------")
-    if "users" not in collection:
-        raise Exception("--------Collection 'users' does not exist in MongoDB--------")
+    collections = set(db.list_collection_names())
+    expected_collections = {"users", "repositories"}
+    missing_collections = expected_collections - collections
+
+    print(f"------MongoDB collections: {collections}------")
+    if missing_collections:
+        raise Exception(
+            f"--------MongoDB collections do not exist: {missing_collections}--------"
+        )
+
 
 def validate_expected_columns(cursor):
     expected_columns = {

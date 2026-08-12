@@ -87,3 +87,79 @@ BEGIN
 END//
 
 DELIMITER ;
+
+CREATE TABLE IF NOT EXISTS repositories_log (
+    log_id BIGINT NOT NULL AUTO_INCREMENT,
+    repo_id BIGINT,
+    name VARCHAR(255),
+    url VARCHAR(255),
+    state VARCHAR(20),
+    log_timestamp TIMESTAMP(3)
+        DEFAULT CURRENT_TIMESTAMP(3),
+
+    PRIMARY KEY (log_id)
+);
+
+DROP TRIGGER IF EXISTS after_insert_repository_log;
+DROP TRIGGER IF EXISTS after_update_repository_log;
+DROP TRIGGER IF EXISTS after_delete_repository_log;
+
+DELIMITER //
+
+CREATE TRIGGER after_insert_repository_log
+AFTER INSERT ON repositories
+FOR EACH ROW
+BEGIN
+    INSERT INTO repositories_log (
+        repo_id,
+        name,
+        url,
+        state
+    )
+    VALUES (
+        NEW.repo_id,
+        NEW.name,
+        NEW.url,
+        'INSERT'
+    );
+END//
+
+
+CREATE TRIGGER after_update_repository_log
+AFTER UPDATE ON repositories
+FOR EACH ROW
+BEGIN
+    INSERT INTO repositories_log (
+        repo_id,
+        name,
+        url,
+        state
+    )
+    VALUES (
+        NEW.repo_id,
+        NEW.name,
+        NEW.url,
+        'UPDATE'
+    );
+END//
+
+
+CREATE TRIGGER after_delete_repository_log
+AFTER DELETE ON repositories
+FOR EACH ROW
+BEGIN
+    INSERT INTO repositories_log (
+        repo_id,
+        name,
+        url,
+        state
+    )
+    VALUES (
+        OLD.repo_id,
+        OLD.name,
+        OLD.url,
+        'DELETE'
+    );
+END//
+
+DELIMITER ;

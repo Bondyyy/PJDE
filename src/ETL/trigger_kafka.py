@@ -4,6 +4,32 @@ from kafka import KafkaProducer
 import json
 import time
 
+RAW_TOPIC = "BondyPJDE_raw"
+LOG_SOURCES = {
+    "users": {
+        "table": "users_log",
+        "columns": ["log_id", "user_id", "login", "gravatar_id", "url", "avatar_url", "state", "log_timestamp"]
+    },
+    "repositories": {
+        "table": "repositories_log",
+        "columns": ["log_id", "repo_id", "name", "url", "state", "log_timestamp"],
+    }
+}
+
+def fetch_logs(cursor, table_name, columns, last_log_id):
+    selected_columns = ", ".join(f"`{column}`" for column in columns)
+    cursor.execute(
+        f"""
+            SELECT {selected_columns}
+            FROM `{table_name}`
+            WHERE log_id > %s
+            ORDER BY log_id
+        """,
+        (last_log_id,),
+    )
+    return cursor.fetchall()
+
+
 def trigger_kafka():
     configDB = get_database_config()
     configKafka = get_kafka_config()
@@ -16,46 +42,42 @@ def trigger_kafka():
         ).encode("utf-8")
     )
 
-    with MySQLConnect(
-        configDB["mysql"].host,
-        configDB["mysql"].port,
-        configDB["mysql"].user,
-        configDB["mysql"].password
-    ) as mysql_conn:
+    try:
+        with MySQLConnect(configDB["mysql"].host, configDB["mysql"].port, configDB["mysql"].user, configDB["mysql"].password) as mysql_conn:
 
-        connection = mysql_conn.connection
-        cursor = mysql_conn.cursor
-        database = configDB["mysql"].database
+            connection = mysql_conn.connection
+            cursor = mysql_conn.cursor
+            database = configDB["mysql"].database
 
-        cursor.execute(f"USE {database}")
+            cursor.execute(f"USE `{database}`")
+            connection.autocommit = True
 
-        connection.autocommit = True
+            last_log_ids = {
+                "users": 0,
+                "repositories": 0,
+            }
 
-        last_log_id = 0
-        columns = ["log_id", "user_id", "login", "gravatar_id", "url", "avatar_url",
-            "state", "log_timestamp"
-        ]
-        while True:
-            cursor.execute("""
-                SELECT log_id, user_id, login, gravatar_id, url,
-                    avatar_url, state, log_timestamp
-                FROM users_log
-                WHERE log_id > %s
-                ORDER BY log_id
-            """, (last_log_id,))
-            data = cursor.fetchall()
-            
-            if data:
-                for row in data:
-                    message = dict(zip(columns, row))
-                    producer.send("BondyPJDE_raw", message)
+            while True:
+                for entity, source in LOG_SOURCES.items():
+                    rows = fetch_logs(cursor, source["table"], source["columns"], last_log_ids[entity])
 
-                producer.flush()
+                    if not rows:
+                        continue
 
-                last_log_id = data[-1][0]
+                    for row in rows:
+                        message = dict(zip(source["columns"], row))
+                        message["entity"] = entity
+                        producer.send(RAW_TOPIC, message)
 
-                print(f"Sent {len(data)} records")
-                print(f"Last log id: {last_log_id}")
+                    producer.flush()
+                    last_log_ids[entity] = rows[-1][0]
+
+                    print(f"Sent {len(rows)} {entity} records")
+                    print(
+                        f"Last {entity} log id: {last_log_ids[entity]}"
+                    )
+    finally:
+        producer.close()
 
 
 def main():
