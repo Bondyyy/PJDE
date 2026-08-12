@@ -1,4 +1,5 @@
 from bson.int64 import Int64
+from dotenv import load_dotenv
 from pymongo import MongoClient
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, from_json
@@ -10,7 +11,8 @@ from config.database_config import (
     get_kafka_config,
 )
 
-CHECKPOINT_LOCATION = os.getenv( "SPARK_CHECKPOINT_LOCATION")
+load_dotenv()
+CHECKPOINT_LOCATION = os.getenv("SPARK_CHECKPOINT_LOCATION")
 USER_COLLECTION = "users"
 REPOSITORY_COLLECTION = "repositories"
 
