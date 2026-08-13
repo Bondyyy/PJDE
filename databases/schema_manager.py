@@ -142,7 +142,7 @@ def create_mongo_schema(db):
         "users",
         users_validator,
         "user_id",
-        unique_index=False,
+        unique_index=True,
     )
     create_collection(
         db,
