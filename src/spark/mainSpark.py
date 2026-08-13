@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 
 from config.spark_config import SparkConnect
 from config.database_config import get_spark_config
-from src.spark.spark_wrtie_data import SparkWriteDatabase
+from src.spark.spark_write_data import SparkWriteDatabase
 
 from pyspark.sql.types import (
     StructType,
