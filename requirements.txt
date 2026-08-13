@@ -1,7 +1,7 @@
 python-dotenv
 mysql-connector-python
 pymongo
-pyspark
-pandas
+pyspark==4.2.0
+pandas>=2.2,<3.0
 numpy
 kafka-python

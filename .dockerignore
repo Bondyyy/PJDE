@@ -1,0 +1,28 @@
+# Virtual environment Windows
+PJDE/
+.venv/
+venv/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Git
+.git/
+
+# Secrets / local config
+.env
+.env.compose
+
+# Spark runtime state
+checkpoints/
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+data/

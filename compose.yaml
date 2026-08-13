@@ -1,0 +1,330 @@
+name: pjde
+services:
+
+  # MYSQL
+
+  mysql:
+    image: mysql/mysql-server:latest
+    container_name: PJmysql
+
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_ROOT_HOST: "%"
+      MYSQL_DATABASE: ${MYSQL_DB_NAME}
+
+    ports:
+      - "3307:3306"
+
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+    restart: unless-stopped
+
+  # MONGODB
+
+  mongodb:
+    image: mongo:latest
+    container_name: PJmongodb
+
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
+
+    ports:
+      - "27017:27017"
+
+    volumes:
+      - mongo_data:/data/db
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mongosh --quiet --username $$MONGO_INITDB_ROOT_USERNAME --password $$MONGO_INITDB_ROOT_PASSWORD --authenticationDatabase admin --eval \"db.adminCommand('ping').ok\""
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+    restart: unless-stopped
+
+  # KAFKA STORAGE INIT
+
+  kafka-storage-init:
+    image: apache/kafka:4.3.1
+    container_name: PJkafka-storage-init
+
+    user: "0:0"
+
+    entrypoint:
+      - /bin/sh
+      - -c
+
+    command:
+      - |
+        mkdir -p /tmp/kraft-combined-logs
+        chown -R 1000:1000 /tmp/kraft-combined-logs
+        echo "Kafka storage permission ready."
+
+    volumes:
+      - kafka_data:/tmp/kraft-combined-logs
+
+    restart: "no"
+
+  # KAFKA
+
+  kafka:
+    image: apache/kafka:4.3.1
+    container_name: PJkafka
+    hostname: kafka
+
+    depends_on:
+      kafka-storage-init:
+        condition: service_completed_successfully
+
+    ports:
+      - "9092:9092"
+
+    volumes:
+      - kafka_data:/tmp/kraft-combined-logs
+
+    environment:
+      KAFKA_NODE_ID: 1
+
+      KAFKA_PROCESS_ROLES: broker,controller
+
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: >
+        CONTROLLER:PLAINTEXT,
+        PLAINTEXT:PLAINTEXT,
+        PLAINTEXT_HOST:PLAINTEXT
+
+      KAFKA_LISTENERS: >
+        PLAINTEXT://:29092,
+        CONTROLLER://:29093,
+        PLAINTEXT_HOST://:9092
+
+      KAFKA_ADVERTISED_LISTENERS: >
+        PLAINTEXT://kafka:29092,
+        PLAINTEXT_HOST://localhost:9092
+
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+
+      KAFKA_SHARE_COORDINATOR_STATE_TOPIC_REPLICATION_FACTOR: 1
+
+      KAFKA_SHARE_COORDINATOR_STATE_TOPIC_MIN_ISR: 1
+
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+
+      KAFKA_NUM_PARTITIONS: 1
+
+      KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
+
+      CLUSTER_ID: 4L6g3nShT-eMCtK--X86sw
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1"
+        ]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+      start_period: 20s
+
+    restart: unless-stopped
+
+  # KAFKA INIT
+  # Tạo RAW / VALIDATED / DLQ
+  kafka-init:
+    image: apache/kafka:4.3.1
+    container_name: PJkafka-init
+
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+    entrypoint:
+      - /bin/sh
+      - -c
+
+    command:
+      - |
+        echo "Creating Kafka topics..."
+
+        /opt/kafka/bin/kafka-topics.sh \
+          --bootstrap-server kafka:29092 \
+          --create \
+          --if-not-exists \
+          --topic BondyPJDE_raw \
+          --partitions 1 \
+          --replication-factor 1
+
+        /opt/kafka/bin/kafka-topics.sh \
+          --bootstrap-server kafka:29092 \
+          --create \
+          --if-not-exists \
+          --topic BondyPJDE_validated \
+          --partitions 1 \
+          --replication-factor 1
+
+        /opt/kafka/bin/kafka-topics.sh \
+          --bootstrap-server kafka:29092 \
+          --create \
+          --if-not-exists \
+          --topic BondyPJDE_dlq \
+          --partitions 1 \
+          --replication-factor 1
+
+        echo "Kafka topics created successfully."
+
+    restart: "no"
+
+  # DATABASE SETUP
+  # Tạo schema / trigger / checkpoint / Mongo collections
+  db-setup:
+    build: .
+    image: pjde-app:test
+    container_name: PJdb-setup
+
+    env_file:
+      - .env.compose
+
+    command:
+      - python
+      - -m
+      - src.main
+
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+      mongodb:
+        condition: service_healthy
+
+    restart: "no"
+
+  # KAFKA VALIDATOR
+  # RAW -> VALIDATED / DLQ
+  validator:
+    image: pjde-app:test
+    container_name: PJvalidator
+
+    env_file:
+      - .env.compose
+
+    command:
+      - python
+      - -m
+      - src.ETL.kafka_validator
+
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+
+    restart: unless-stopped
+
+  # SPARK STREAMING
+  # VALIDATED -> MONGODB
+  spark-streaming:
+    image: pjde-app:test
+    container_name: PJspark-streaming
+
+    env_file:
+      - .env.compose
+
+    command:
+      - python
+      - -m
+      - src.ETL.spark_streaming
+
+    volumes:
+      - spark_checkpoint:/app/checkpoints
+      - spark_ivy:/root/.ivy2
+
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+
+      db-setup:
+        condition: service_completed_successfully
+
+    restart: unless-stopped
+
+  # PRODUCER
+  # MYSQL LOG -> KAFKA RAW
+  producer:
+    image: pjde-app:test
+    container_name: PJproducer
+
+    env_file:
+      - .env.compose
+
+    command:
+      - python
+      - -m
+      - src.ETL.trigger_kafka
+
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+
+      db-setup:
+        condition: service_completed_successfully
+
+    restart: unless-stopped
+
+  # INITIAL LOAD
+  initial-load:
+    image: pjde-app:test
+
+    profiles:
+      - manual
+
+    env_file:
+      - .env.compose
+
+    command:
+      - python
+      - -m
+      - src.spark.mainSpark
+
+    volumes:
+      - ./data:/app/data:ro
+      - spark_ivy:/root/.ivy2
+
+    depends_on:
+      db-setup:
+        condition: service_completed_successfully
+
+    restart: "no"
+
+# PERSISTENT VOLUMES
+volumes:
+  mysql_data:
+  mongo_data:
+  kafka_data:
+  spark_checkpoint:
+  spark_ivy:

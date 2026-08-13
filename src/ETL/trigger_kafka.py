@@ -91,6 +91,7 @@ def trigger_kafka():
                     print(
                         f"Last {entity} log id: {last_log_ids[entity]}"
                     )
+                time.sleep(1)
     finally:
         producer.close()
 

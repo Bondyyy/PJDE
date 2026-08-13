@@ -1,17 +1,28 @@
-﻿__pycache__/
-*.pyc
-*.pyo
-*.pyd
-
+﻿
 .env
+.env.compose
+.env.*
+
+!.env.example
+!.env.compose.example
+
+__pycache__/
+*.py[cod]
+
+PJDE/
 .venv/
 venv/
-env/
 
-.ipynb_checkpoints/
-.vscode/
-.idea/
+checkpoints/
 
 *.log
 
-/checkpoints
+data/
+
+.vscode/
+.idea/
+
+.DS_Store
+Thumbs.db
+
+kafka-docker/
